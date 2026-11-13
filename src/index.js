@@ -24,6 +24,15 @@ export default {
     }
 
     const { events = [] } = JSON.parse(body);
+    // 診斷記錄：只記事件類型，不記使用者訊息內容
+    console.log(
+      JSON.stringify({
+        msg: "webhook received",
+        eventCount: events.length,
+        eventTypes: events.map((e) => `${e.type}/${e.message?.type ?? "-"}`),
+        accessTokenConfigured: Boolean((env.LINE_CHANNEL_ACCESS_TOKEN || "").trim()),
+      })
+    );
     await Promise.all(events.map((e) => handleEvent(e, env)));
     return new Response("OK", { status: 200 });
   },
@@ -43,11 +52,17 @@ async function reply(replyToken, text, env) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
+      Authorization: `Bearer ${(env.LINE_CHANNEL_ACCESS_TOKEN || "").trim()}`,
     },
     body: JSON.stringify({ replyToken, messages: [{ type: "text", text }] }),
   });
-  if (!res.ok) console.log("LINE reply failed", res.status, await res.text());
+  if (res.ok) {
+    console.log(JSON.stringify({ msg: "LINE reply ok", status: res.status }));
+  } else {
+    console.log(
+      JSON.stringify({ msg: "LINE reply failed", status: res.status, detail: await res.text() })
+    );
+  }
 }
 
 async function verifySignature(body, signature, secret) {
