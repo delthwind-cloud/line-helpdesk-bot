@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>問題回報小幫手：使用說明與回報方式</title>
+<style>
+  :root {
+    --ink: #1b2b4b;
+    --ink-soft: #2b3f66;
+    --paper: #f6f8fb;
+    --white: #ffffff;
+    --rule: #c3cee1;
+    --muted: #566684;
+    --green: #06c755;
+    --green-text: #04833a;
+    --green-bg: #e3f8ec;
+    --amber: #f2a900;
+    --amber-text: #8a5d00;
+    --amber-bg: #fff2cf;
+    --stone: #8795ae;
+    --stone-bg: #e8edf5;
+    --danger: #c0392b;
+    --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+    --mono: ui-monospace, "SF Mono", Consolas, "Noto Sans Mono CJK TC", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #0f1a30;
+    color: var(--ink);
+    font-family: var(--font);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── 舞台：固定 1280×720，依視窗等比縮放 ── */
+  #viewport { position: fixed; inset: 0; display: grid; place-items: center; }
+  #stage {
+    width: 1280px; height: 720px; flex: none; position: relative;
+    transform-origin: center center; background: var(--paper); overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  }
+  .slide {
+    position: absolute; inset: 0; padding: 76px 96px 110px;
+    display: none; background: var(--paper); color: var(--ink);
+  }
+  .slide.active { display: block; }
+  .slide.dark { background: var(--ink); color: var(--paper); }
+
+  h1, h2, h3, p { margin: 0; }
+  h2 {
+    font-size: 54px; line-height: 1.18; font-weight: 800; letter-spacing: -0.01em;
+    max-width: 17em; margin-bottom: 40px; text-wrap: balance;
+  }
+  .lead { font-size: 28px; line-height: 1.6; color: var(--muted); max-width: 24em; }
+  .dark .lead { color: #c5d0e6; }
+  .small { font-size: 21px; line-height: 1.6; color: var(--muted); }
+  .dark .small { color: #aebbd6; }
+  code, .cmd {
+    font-family: var(--mono); font-weight: 700; font-size: .92em;
+    background: var(--white); border: 1px solid var(--rule); border-radius: 8px;
+    padding: .06em .45em; color: var(--ink); white-space: nowrap;
+  }
+  .dark code, .dark .cmd { background: var(--ink-soft); border-color: #44598a; color: var(--paper); }
+
+  /* ── 底部撕線進度 + 號碼牌 ── */
+  .chrome { position: absolute; left: 96px; right: 96px; bottom: 44px; height: 28px; display: flex; align-items: center; gap: 24px; pointer-events: none; }
+  .tear { flex: 1; height: 0; border-top: 3px dashed var(--rule); position: relative; }
+  .tear i { position: absolute; left: 0; top: -3px; height: 3px; width: var(--p, 0%); background: var(--green); transition: width .25s; }
+  .stub { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+  body.is-dark .tear { border-top-color: #44598a; }
+  body.is-dark .stub { color: #aebbd6; }
+
+  /* ── 票券（封面、結語） ── */
+  .ticket {
+    position: relative; background: var(--white); color: var(--ink); border-radius: 22px;
+    display: grid; grid-template-rows: 1fr auto;
+  }
+  .ticket::before, .ticket::after {
+    content: ""; position: absolute; top: calc(100% - 96px - 18px); width: 36px; height: 36px; border-radius: 50%;
+    background: var(--ink);
+  }
+  .ticket::before { left: -18px; }
+  .ticket::after { right: -18px; }
+  .ticket .qr { padding: 36px 36px 28px; display: grid; justify-items: center; gap: 16px; }
+  .ticket .qr svg { width: 260px; height: 260px; shape-rendering: crispEdges; }
+  .ticket .qr b { font-size: 24px; }
+  .ticket .tail {
+    border-top: 3px dashed var(--rule); padding: 0 36px; height: 96px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--mono); font-size: 22px; font-weight: 700;
+  }
+  .ticket .tail span:last-child { color: var(--green-text); }
+
+  /* ── 封面 ── */
+  .cover { display: grid; grid-template-columns: 1fr 380px; gap: 72px; align-items: center; padding-bottom: 96px; }
+  .cover h1 { font-size: 104px; line-height: 1.08; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 36px; }
+  .cover .meta { margin-top: 56px; font-size: 21px; color: #aebbd6; }
+
+  /* ── 三欄（以撕線分隔，不用卡片） ── */
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .col { padding: 8px 40px 8px 0; }
+  .col + .col { padding-left: 40px; border-left: 3px dashed var(--rule); }
+  .col .cmd { font-size: 40px; display: inline-block; margin-bottom: 22px; }
+  .col p { font-size: 30px; line-height: 1.6; color: var(--muted); }
+
+  /* ── 步驟 ── */
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 22px; }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 52px 1fr; gap: 20px; align-items: start; font-size: 27px; line-height: 1.5; }
+  .dark .steps li::before { background: var(--green); color: var(--ink); }
+  .steps li::before {
+    content: counter(s); width: 52px; height: 52px; border-radius: 50%;
+    background: var(--ink); color: var(--paper); display: grid; place-items: center;
+    font-weight: 800; font-size: 26px;
+  }
+  .two { display: grid; grid-template-columns: 1fr 400px; gap: 72px; align-items: start; }
+  .two.wide-left { grid-template-columns: 1.15fr 1fr; gap: 64px; }
+
+  /* ── 手機畫面（聊天） ── */
+  .phone { width: 360px; background: var(--white); border-radius: 36px; border: 3px solid var(--ink); overflow: hidden; box-shadow: 0 10px 0 var(--stone-bg); }
+  .phone .bar { background: var(--ink); color: var(--paper); font-weight: 700; font-size: 20px; padding: 14px 20px; display: flex; align-items: center; gap: 10px; }
+  .phone .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+  .chat { padding: 18px 16px 22px; display: grid; gap: 12px; background: #e9eef6; min-height: 430px; align-content: start; }
+  .b { max-width: 88%; padding: 12px 16px; border-radius: 18px; font-size: 19px; line-height: 1.5; white-space: pre-line; }
+  .b.me { justify-self: end; background: #b7f0cf; border-bottom-right-radius: 6px; }
+  .b.bot { justify-self: start; background: var(--white); border-bottom-left-radius: 6px; }
+
+  /* ── 表單示意 ── */
+  .form { width: 400px; background: var(--white); border: 3px solid var(--ink); border-radius: 22px; padding: 26px 26px 28px; box-shadow: 0 10px 0 var(--stone-bg); display: grid; gap: 18px; }
+  .form .f label { display: block; font-weight: 800; font-size: 19px; margin-bottom: 6px; }
+  .form .box { border: 2px solid var(--rule); border-radius: 10px; padding: 10px 14px; font-size: 19px; color: var(--muted); }
+  .form .box.tall { min-height: 92px; }
+  .form .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form .seg span { border: 2px solid var(--rule); border-radius: 10px; padding: 9px 0; text-align: center; font-size: 19px; font-weight: 700; color: var(--muted); }
+  .form .seg span.on { border-color: var(--green); background: var(--green-bg); color: var(--green-text); }
+  .form .btn { background: var(--green); color: var(--white); border-radius: 12px; padding: 13px 0; text-align: center; font-weight: 800; font-size: 21px; }
+
+  /* ── 狀態牌 ── */
+  .pill { display: inline-block; font-weight: 800; font-size: 22px; padding: 4px 18px; border-radius: 999px; }
+  .pill.s0 { background: var(--stone-bg); color: var(--muted); }
+  .pill.s1 { background: var(--amber-bg); color: var(--amber-text); }
+  .pill.s2 { background: var(--green-bg); color: var(--green-text); }
+  .flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: start; gap: 16px; margin-top: 8px; }
+  .flow .arrow { font-size: 34px; color: var(--stone); padding-top: 2px; }
+  .flow p { font-size: 21px; line-height: 1.5; color: var(--muted); margin-top: 10px; }
+  .row { background: var(--white); border: 3px solid var(--ink); border-radius: 18px; padding: 22px 28px; display: grid; gap: 8px; box-shadow: 0 8px 0 var(--stone-bg); }
+  .row .no { font-family: var(--mono); font-weight: 800; font-size: 30px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .row .meta { font-size: 20px; color: var(--muted); }
+  .row .desc { font-size: 24px; }
+
+  /* ── 表格式清單（先試試這些） ── */
+  .trbl { width: 100%; border-collapse: collapse; font-size: 24px; line-height: 1.5; }
+  .trbl th, .trbl td { text-align: left; padding: 14px 18px 14px 0; vertical-align: top; }
+  .trbl tr + tr td { border-top: 2px dashed var(--rule); }
+  .trbl td:first-child { width: 36%; font-weight: 800; padding-right: 32px; }
+  .trbl td:last-child { color: var(--muted); }
+
+  .callout { margin-top: 30px; padding: 20px 26px; border-radius: 14px; background: var(--white); border: 3px solid var(--ink); font-size: 24px; line-height: 1.55; }
+  .sample { background: var(--white); border: 3px dashed var(--stone); border-radius: 14px; padding: 18px 24px; font-size: 22px; line-height: 1.6; color: var(--ink); }
+
+  /* ── 架構圖 ── */
+  .arch { width: 100%; height: auto; display: block; }
+  .arch text { font-family: var(--font); }
+
+  /* ── 版本表 ── */
+  .ver { display: grid; gap: 14px; font-size: 23px; line-height: 1.45; }
+  .ver div { display: grid; grid-template-columns: 78px 1fr; gap: 16px; }
+  .ver b { font-family: var(--mono); color: var(--green-text); }
+  .ver a, .link { color: var(--ink); font-weight: 800; text-decoration-thickness: 3px; text-decoration-color: var(--green); text-underline-offset: 6px; }
+  .dark a { color: var(--paper); }
+
+  ul.plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 16px; font-size: 25px; line-height: 1.5; }
+  ul.plain li { padding-left: 26px; position: relative; }
+  ul.plain li::before { content: ""; position: absolute; left: 0; top: .62em; width: 12px; height: 12px; border-radius: 3px; background: var(--green); }
+  h3 { font-size: 30px; font-weight: 800; margin-bottom: 18px; }
+
+  /* ── 操作列（不屬於投影片本體） ── */
+  .ui { position: fixed; z-index: 10; display: flex; gap: 8px; }
+  .ui.top { top: 12px; right: 12px; }
+  .ui.nav { left: 50%; bottom: 10px; transform: translateX(-50%); align-items: center; background: rgba(15,26,48,.82); border: 1px solid #3a4c74; border-radius: 999px; padding: 2px; gap: 0; }
+  .ui.nav button { background: transparent; border-color: transparent; }
+  .ui button {
+    font: inherit; font-size: 15px; font-weight: 700; color: #eaf0fb; background: rgba(15,26,48,.82);
+    border: 1px solid #3a4c74; border-radius: 999px; padding: 8px 16px; cursor: pointer; min-height: 40px;
+  }
+  .ui button:hover { background: #24375e; }
+  .ui button:focus-visible, .toc button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+  .ui .count { color: #c5d0e6; font-size: 15px; font-weight: 700; min-width: 64px; text-align: center; font-family: var(--mono); }
+
+  .toc { position: fixed; inset: 0; z-index: 20; background: rgba(15,26,48,.96); display: none; overflow: auto; padding: 64px 24px; }
+  .toc.open { display: block; }
+  .toc ol { list-style: none; margin: 0 auto; padding: 0; max-width: 640px; display: grid; gap: 10px; counter-reset: t; }
+  .toc li { counter-increment: t; }
+  .toc button {
+    width: 100%; text-align: left; font: inherit; font-size: 20px; font-weight: 700; color: #eaf0fb;
+    background: #1b2b4b; border: 1px solid #3a4c74; border-radius: 14px; padding: 14px 20px; cursor: pointer;
+    display: grid; grid-template-columns: 56px 1fr; gap: 12px;
+  }
+  .toc button::before { content: counter(t, decimal-leading-zero); font-family: var(--mono); color: var(--green); }
+  .toc button:hover, .toc button[aria-current="true"] { background: #2b3f66; }
+  .toc h2 { color: #eaf0fb; font-size: 26px; text-align: center; margin: 0 auto 24px; }
+
+  @media (max-width: 700px) { .ui button { padding: 6px 12px; font-size: 14px; } }
+
+  /* ── 列印 / 存成 PDF：每張一頁 ── */
+  @media print {
+    @page { size: 1280px 720px; margin: 0; }
+    html, body { overflow: visible; height: auto; background: #fff; }
+    #viewport { position: static; display: block; }
+    #stage { transform: none !important; width: auto; height: auto; box-shadow: none; overflow: visible; }
+    .slide { display: block !important; position: relative; width: 1280px; height: 720px; page-break-after: always; break-after: page; }
+    .chrome, .ui, .toc { display: none !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <main id="stage" aria-live="polite">
+
+    <!-- 1 封面 -->
+    <section class="slide dark" data-title="問題回報小幫手（封面）">
+      <div class="cover">
+        <div>
+          <h1>問題回報<br />小幫手</h1>
+          <p class="lead">在 LINE 裡回報問題、查處理進度，還能直接問 AI。</p>
+          <p class="meta">課程專題作業　2026 年 11 月</p>
+        </div>
+        <div class="ticket">
+          <div class="qr">
+            <svg viewBox="0 0 29 29" class="segno"><path class="qrline" stroke="#1b2b4b" d="M0 0.5h7m4 0h1m1 0h1m1 0h1m1 0h1m1 0h2m1 0h7m-29 1h1m5 0h1m1 0h2m3 0h1m4 0h1m1 0h1m1 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m1 0h5m9 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m2 0h1m1 0h1m5 0h1m4 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m3 0h5m1 0h2m1 0h1m2 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m3 0h1m1 0h1m1 0h1m3 0h3m1 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-20 1h1m1 0h4m2 0h1m2 0h1m-20 1h3m1 0h2m2 0h2m1 0h3m2 0h2m1 0h1m5 0h2m-28 1h1m1 0h1m2 0h1m1 0h2m2 0h1m2 0h3m1 0h2m1 0h2m1 0h3m1 0h1m-29 1h1m5 0h1m1 0h1m2 0h1m4 0h3m3 0h2m1 0h1m1 0h1m-28 1h1m1 0h2m1 0h1m3 0h1m2 0h1m2 0h1m2 0h2m8 0h1m-26 1h2m1 0h3m3 0h1m1 0h1m2 0h3m1 0h1m1 0h1m1 0h4m-28 1h1m1 0h1m3 0h2m1 0h2m1 0h1m1 0h1m3 0h1m2 0h2m1 0h2m1 0h1m-27 1h1m2 0h4m1 0h4m1 0h1m2 0h2m1 0h1m1 0h3m2 0h1m-28 1h1m2 0h2m2 0h1m2 0h2m1 0h2m4 0h1m1 0h1m1 0h2m1 0h2m-29 1h1m1 0h1m2 0h2m1 0h4m1 0h3m2 0h2m1 0h1m2 0h2m-25 1h2m2 0h1m1 0h1m1 0h1m3 0h1m2 0h3m3 0h2m-24 1h1m2 0h2m1 0h2m1 0h2m4 0h3m2 0h1m1 0h2m-20 1h1m3 0h5m1 0h2m1 0h1m1 0h4m1 0h3m-26 1h1m2 0h1m1 0h3m2 0h3m1 0h12m1 0h1m-21 1h1m3 0h3m3 0h1m1 0h1m3 0h2m-26 1h7m3 0h1m1 0h1m1 0h1m1 0h2m1 0h2m1 0h1m1 0h1m1 0h2m-28 1h1m5 0h1m1 0h1m1 0h3m1 0h1m5 0h1m3 0h1m2 0h1m-28 1h1m1 0h3m1 0h1m2 0h3m3 0h1m1 0h1m2 0h7m1 0h1m-29 1h1m1 0h3m1 0h1m1 0h3m2 0h4m2 0h1m4 0h1m3 0h1m-29 1h1m1 0h3m1 0h1m1 0h5m1 0h1m1 0h1m1 0h1m1 0h1m2 0h1m4 0h1m-29 1h1m5 0h1m1 0h1m2 0h1m1 0h1m1 0h1m3 0h3m2 0h1m2 0h1m-28 1h7m4 0h5m2 0h1m1 0h1m2 0h1m3 0h1"/></svg>
+            <b>掃描加入好友</b>
+          </div>
+          <div class="tail"><span>阿倫的小工作坊</span><span>@392tmphk</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 這是什麼 -->
+    <section class="slide" data-title="三件事，都在 LINE 對話裡完成">
+      <h2>三件事，都在 LINE 對話裡完成</h2>
+      <div class="cols">
+        <div class="col"><span class="cmd">回報</span><p>開啟表單，描述問題，取得單號。</p></div>
+        <div class="col"><span class="cmd">查詢</span><p>看你最近的問題單，知道處理到哪一步。</p></div>
+        <div class="col"><span class="cmd">直接輸入問題</span><p>AI 小幫手用繁體中文回答，答不了就請你回報。</p></div>
+      </div>
+      <p class="small" style="margin-top:72px;font-size:24px">忘了怎麼用？隨時輸入 <code>說明</code> 看指令清單。</p>
+    </section>
+
+    <!-- 3 開始使用 -->
+    <section class="slide" data-title="第一次使用：加好友就能開始">
+      <div class="two">
+        <div>
+          <h2>第一次使用：加好友就能開始</h2>
+          <ol class="steps">
+            <li><span>掃描上一頁的 QR code，加「阿倫的小工作坊」為好友，或搜尋 <code>@392tmphk</code>。</span></li>
+            <li><span>在聊天室輸入 <code>說明</code>，確認小幫手有回應。</span></li>
+            <li><span>輸入 <code>回報</code>，送出你的第一張問題單。</span></li>
+          </ol>
+          <p class="small" style="margin-top:30px">加入時看到「尚未認證的官方帳號」提示是正常的，這是課堂專案帳號。</p>
+        </div>
+        <div class="phone" aria-hidden="true">
+          <div class="bar"><i></i>阿倫的小工作坊</div>
+          <div class="chat">
+            <div class="b me">說明</div>
+            <div class="b bot">問題回報小幫手使用說明
+• 輸入「回報」→ 開啟問題回報表單
+• 輸入「查詢」→ 看你最近的問題單與處理狀態
+• 直接輸入問題 → AI 小幫手回答
+• 小幫手本身有問題 → 用「回報」表單，類別選「其他」</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 回報問題 -->
+    <section class="slide" data-title="回報問題：五個動作">
+      <div class="two wide-left">
+        <div>
+          <h2 style="margin-bottom:28px">回報問題：五個動作</h2>
+          <ol class="steps" style="gap:12px">
+            <li><span>輸入 <code>回報</code></span></li>
+            <li><span>點小幫手回傳的連結，開啟表單</span></li>
+            <li><span>選問題類別與急迫程度，寫下描述</span></li>
+            <li><span>按「送出回報」，取得單號</span></li>
+            <li><span>聊天室收到「已收到你的問題回報」</span></li>
+          </ol>
+          <p class="small" style="margin-top:20px;font-size:19px;line-height:1.55">類別：帳號登入、設備故障、網路問題、軟體操作、其他。描述最多 500 字，每人每小時最多 10 筆。</p>
+        </div>
+        <div class="form" aria-hidden="true">
+          <div class="f"><label>問題類別</label><div class="box">網路問題</div></div>
+          <div class="f"><label>急迫程度</label><div class="seg"><span class="on">一般</span><span>急</span></div></div>
+          <div class="f"><label>問題描述</label><div class="box tall">辦公室 Wi-Fi 連得上但打不開網頁…</div></div>
+          <div class="btn">送出回報</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 查進度 -->
+    <section class="slide" data-title="查進度：看單號和狀態">
+      <div class="two wide-left">
+        <div>
+          <h2>查進度：看單號和狀態</h2>
+          <ul class="plain">
+            <li>在聊天室輸入 <code>查詢</code>，看最近 5 筆。</li>
+            <li>在表單點「我的問題單」，看最近 20 筆，含完整描述。</li>
+          </ul>
+          <div class="flow" style="margin-top:44px">
+            <div><span class="pill s0">未處理</span><p>已收到，還沒人接手</p></div>
+            <span class="arrow">›</span>
+            <div><span class="pill s1">處理中</span><p>有人正在處理</p></div>
+            <span class="arrow">›</span>
+            <div><span class="pill s2">已完成</span><p>問題已解決</p></div>
+          </div>
+        </div>
+        <div class="row" aria-hidden="true">
+          <div class="no">#261113-0001 <span class="pill s1" style="font-size:20px">處理中</span></div>
+          <div class="meta">帳號登入・11/13 12:53</div>
+          <div class="desc">帳號被鎖</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 問 AI -->
+    <section class="slide" data-title="直接問，AI 小幫手會回答">
+      <div class="two">
+        <div>
+          <h2>直接問，AI 小幫手會回答</h2>
+          <ul class="plain">
+            <li>在聊天室直接輸入問題，幾秒內回覆。</li>
+            <li>每人每天 15 則，全站每天 300 則。</li>
+            <li>額度用完，隔天台灣時間早上 8 點恢復。<code>回報</code>、<code>查詢</code>、<code>說明</code> 不受影響。</li>
+            <li>AI 可能答錯。重要的事，請用 <code>回報</code> 交給人處理。</li>
+          </ul>
+        </div>
+        <div class="phone" aria-hidden="true">
+          <div class="bar"><i></i>阿倫的小工作坊</div>
+          <div class="chat">
+            <div class="b me">我的電腦連不上 Wi-Fi 怎麼辦？</div>
+            <div class="b bot">請先確認以下步驟：
+1. 檢查 Wi-Fi 是否開啟
+2. 確認密碼是否正確
+3. 重啟路由器與電腦
+
+若問題仍未解決，請輸入「回報」填寫問題單，我們會盡快協助您。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7 小幫手出問題時怎麼回報 -->
+    <section class="slide" data-title="小幫手出問題時，這樣回報">
+      <div class="two wide-left">
+        <div>
+          <h2>小幫手出問題時，這樣回報</h2>
+          <ol class="steps" style="gap:18px">
+            <li><span>輸入 <code>回報</code>，開啟表單</span></li>
+            <li><span>問題類別選「<b>其他</b>」</span></li>
+            <li><span>描述寫清楚三件事：<b>做了什麼</b>、<b>看到什麼</b>、<b>大約幾點</b></span></li>
+            <li><span>送出後，記下單號</span></li>
+          </ol>
+          <p class="small" style="margin-top:26px">AI 答錯時，請把你問的問題和它的回答一起貼進描述。</p>
+        </div>
+        <div>
+          <p class="small" style="margin-bottom:12px;color:var(--ink);font-weight:800">描述範例</p>
+          <div class="sample">13:05 輸入「查詢」，等了一分鐘都沒有回應。用 iPhone，LINE 是最新版。</div>
+          <div class="callout">單號是你的憑據。之後輸入 <code>查詢</code>，就能看到這張單處理到哪。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 先試試這些 -->
+    <section class="slide" data-title="回報前，先試試這些">
+      <h2 style="margin-bottom:26px">回報前，先試試這些</h2>
+      <table class="trbl">
+        <tr><td>輸入「回報」沒有回應</td><td>確認是在 1 對 1 聊天（群組不會回應），等幾秒再試一次。</td></tr>
+        <tr><td>表單打不開或一片空白</td><td>把 LINE 更新到最新版，回聊天室重新輸入「回報」並點連結。</td></tr>
+        <tr><td>表單說「登入已失效」</td><td>關閉表單，從聊天室的連結重新開啟。</td></tr>
+        <tr><td>表單說「一小時內最多送出 10 筆」</td><td>稍後再送。</td></tr>
+        <tr><td>AI 說額度用完</td><td>隔天台灣時間早上 8 點恢復。急事請用「回報」。</td></tr>
+        <tr><td>找不到單號</td><td>輸入「查詢」。</td></tr>
+      </table>
+      <p class="small" style="margin-top:14px;font-size:20px">都試過了還是不行？用「回報」，類別選「其他」。</p>
+    </section>
+
+    <!-- 9 運作原理 -->
+    <section class="slide" data-title="背後怎麼運作">
+      <h2 style="margin-bottom:26px">背後怎麼運作</h2>
+      <svg class="arch" viewBox="0 0 1088 330" role="img" aria-label="LINE 使用者經由 LINE 平台把訊息送到 Cloudflare Worker，Worker 存取 D1 資料庫與 Workers AI，並提供 LIFF 表單頁">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1b2b4b"/></marker>
+        </defs>
+        <g fill="none" stroke="#1b2b4b" stroke-width="3">
+          <rect x="2" y="112" width="190" height="104" rx="16" fill="#fff"/>
+          <rect x="296" y="112" width="190" height="104" rx="16" fill="#fff"/>
+          <rect x="590" y="88" width="230" height="152" rx="16" fill="#1b2b4b"/>
+          <rect x="898" y="2" width="188" height="86" rx="16" fill="#fff"/>
+          <rect x="898" y="122" width="188" height="86" rx="16" fill="#fff"/>
+          <rect x="898" y="242" width="188" height="86" rx="16" fill="#fff"/>
+          <path d="M192 164 H292" marker-end="url(#ah)"/>
+          <path d="M486 164 H586" marker-end="url(#ah)"/>
+          <path d="M820 124 C 860 124, 860 45, 894 45" marker-end="url(#ah)"/>
+          <path d="M820 164 H894" marker-end="url(#ah)"/>
+          <path d="M820 204 C 860 204, 860 285, 894 285" marker-end="url(#ah)"/>
+        </g>
+        <g fill="#1b2b4b" font-size="24" font-weight="800" text-anchor="middle">
+          <text x="97" y="157">使用者</text>
+          <text x="391" y="157">LINE 平台</text>
+          <text x="993" y="52">LIFF 表單頁</text>
+          <text x="993" y="172">D1 資料庫</text>
+          <text x="993" y="292">Workers AI</text>
+        </g>
+        <g fill="#566684" font-size="19" text-anchor="middle">
+          <text x="97" y="190">LINE App</text>
+          <text x="391" y="190">轉送訊息</text>
+          <text x="993" y="76">靜態頁面</text>
+          <text x="993" y="196">問題單、額度</text>
+          <text x="993" y="316" fill="#566684">AI 問答</text>
+        </g>
+        <g fill="#f6f8fb" text-anchor="middle">
+          <text x="705" y="150" font-size="26" font-weight="800">Cloudflare</text>
+          <text x="705" y="184" font-size="26" font-weight="800">Worker</text>
+          <text x="705" y="216" font-size="19" fill="#c5d0e6">驗證簽章、分派處理</text>
+        </g>
+      </svg>
+      <p class="small" style="margin-top:14px">使用者傳訊息，LINE 轉送給 Worker。Worker 依內容回覆、把問題單存進 D1，或請 AI 回答。表單頁也由同一個 Worker 提供。</p>
+    </section>
+
+    <!-- 10 版本管理 -->
+    <section class="slide" data-title="每次修改都有版本紀錄">
+      <div class="two wide-left">
+        <div>
+          <h2 style="font-size:50px">每次修改都有版本紀錄</h2>
+          <div class="ver">
+            <div><b>v0.1</b><span>LINE 與 Cloudflare 接通，複誦訊息</span></div>
+            <div><b>v0.2</b><span>修改回覆文字，示範版本差異</span></div>
+            <div><b>v0.3</b><span>LIFF 問題回報表單</span></div>
+            <div><b>v0.4</b><span>問題單存入資料庫，加上查詢</span></div>
+            <div><b>v0.5</b><span>AI 問答與每日額度保護</span></div>
+          </div>
+        </div>
+        <div>
+          <ul class="plain" style="font-size:24px">
+            <li>程式碼放在 GitHub，每個版本都能比對前後差異。</li>
+            <li>推上 main，Cloudflare 自動部署，部署紀錄可回溯、可回滾。</li>
+            <li>LINE 的密鑰只存在 Cloudflare，不放進程式庫。</li>
+          </ul>
+          <p class="small" style="margin-top:28px"><a class="link" style="font-size:19px;white-space:nowrap" href="https://github.com/delthwind-cloud/line-helpdesk-bot" target="_blank" rel="noopener">github.com/delthwind-cloud/line-helpdesk-bot</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11 額度與隱私 -->
+    <section class="slide" data-title="額度與隱私">
+      <h2>額度與隱私</h2>
+      <div class="cols" style="grid-template-columns:1fr 1fr">
+        <div class="col">
+          <h3>免費額度</h3>
+          <ul class="plain" style="font-size:23px;gap:14px">
+            <li>LINE 官方帳號輕用量方案：每月 200 則推播。本專案以回覆訊息為主，不靠推播。</li>
+            <li>Cloudflare Workers AI：每天 10,000 Neurons（台灣時間早上 8 點重置），程式再設每人、全站上限。</li>
+          </ul>
+        </div>
+        <div class="col">
+          <h3>資料</h3>
+          <ul class="plain" style="font-size:23px;gap:14px">
+            <li>問題單會記錄 LINE 暱稱、類別、描述、時間與狀態。</li>
+            <li>AI 問答不保存內容，只記使用次數。</li>
+            <li>請不要在描述裡填密碼或身分證字號。</li>
+            <li>這是課堂專案，尚未做正式上線的隱私聲明。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12 結語 -->
+    <section class="slide dark" data-title="現在就試試看">
+      <div class="cover">
+        <div>
+          <h1 style="font-size:88px">現在就<br />試試看</h1>
+          <ol class="steps" style="margin-top:8px">
+            <li><span>掃描 QR code，加好友</span></li>
+            <li><span>輸入 <code>說明</code></span></li>
+            <li><span>輸入 <code>回報</code>，送出一張問題單</span></li>
+          </ol>
+        </div>
+        <div class="ticket">
+          <div class="qr">
+            <svg viewBox="0 0 29 29" class="segno"><path class="qrline" stroke="#1b2b4b" d="M0 0.5h7m4 0h1m1 0h1m1 0h1m1 0h1m1 0h2m1 0h7m-29 1h1m5 0h1m1 0h2m3 0h1m4 0h1m1 0h1m1 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m1 0h5m9 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m2 0h1m1 0h1m5 0h1m4 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m3 0h5m1 0h2m1 0h1m2 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m3 0h1m1 0h1m1 0h1m3 0h3m1 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-20 1h1m1 0h4m2 0h1m2 0h1m-20 1h3m1 0h2m2 0h2m1 0h3m2 0h2m1 0h1m5 0h2m-28 1h1m1 0h1m2 0h1m1 0h2m2 0h1m2 0h3m1 0h2m1 0h2m1 0h3m1 0h1m-29 1h1m5 0h1m1 0h1m2 0h1m4 0h3m3 0h2m1 0h1m1 0h1m-28 1h1m1 0h2m1 0h1m3 0h1m2 0h1m2 0h1m2 0h2m8 0h1m-26 1h2m1 0h3m3 0h1m1 0h1m2 0h3m1 0h1m1 0h1m1 0h4m-28 1h1m1 0h1m3 0h2m1 0h2m1 0h1m1 0h1m3 0h1m2 0h2m1 0h2m1 0h1m-27 1h1m2 0h4m1 0h4m1 0h1m2 0h2m1 0h1m1 0h3m2 0h1m-28 1h1m2 0h2m2 0h1m2 0h2m1 0h2m4 0h1m1 0h1m1 0h2m1 0h2m-29 1h1m1 0h1m2 0h2m1 0h4m1 0h3m2 0h2m1 0h1m2 0h2m-25 1h2m2 0h1m1 0h1m1 0h1m3 0h1m2 0h3m3 0h2m-24 1h1m2 0h2m1 0h2m1 0h2m4 0h3m2 0h1m1 0h2m-20 1h1m3 0h5m1 0h2m1 0h1m1 0h4m1 0h3m-26 1h1m2 0h1m1 0h3m2 0h3m1 0h12m1 0h1m-21 1h1m3 0h3m3 0h1m1 0h1m3 0h2m-26 1h7m3 0h1m1 0h1m1 0h1m1 0h2m1 0h2m1 0h1m1 0h1m1 0h2m-28 1h1m5 0h1m1 0h1m1 0h3m1 0h1m5 0h1m3 0h1m2 0h1m-28 1h1m1 0h3m1 0h1m2 0h3m3 0h1m1 0h1m2 0h7m1 0h1m-29 1h1m1 0h3m1 0h1m1 0h3m2 0h4m2 0h1m4 0h1m3 0h1m-29 1h1m1 0h3m1 0h1m1 0h5m1 0h1m1 0h1m1 0h1m1 0h1m2 0h1m4 0h1m-29 1h1m5 0h1m1 0h1m2 0h1m1 0h1m1 0h1m3 0h3m2 0h1m2 0h1m-28 1h7m4 0h5m2 0h1m1 0h1m2 0h1m3 0h1"/></svg>
+            <b>阿倫的小工作坊</b>
+          </div>
+          <div class="tail"><span>歡迎提問</span><span>@392tmphk</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="chrome" aria-hidden="true"><div class="tear"><i></i></div><div class="stub" id="stub">No.0001</div></div>
+  </main>
+</div>
+
+<div class="ui top" role="toolbar" aria-label="簡報工具">
+  <button type="button" id="btn-toc">目錄</button>
+  <button type="button" id="btn-fs">全螢幕</button>
+  <button type="button" id="btn-print">存成 PDF</button>
+  <button type="button" id="btn-dl">下載簡報</button>
+</div>
+<div class="ui nav" role="toolbar" aria-label="翻頁">
+  <button type="button" id="btn-prev" aria-label="上一頁">‹ 上一頁</button>
+  <span class="count" id="count">1 / 12</span>
+  <button type="button" id="btn-next" aria-label="下一頁">下一頁 ›</button>
+</div>
+
+<div class="toc" id="toc" role="dialog" aria-label="簡報目錄">
+  <h2>跳到哪一頁？</h2>
+  <ol id="toc-list"></ol>
+</div>
+
+<script>
+(() => {
+  // 先保存原始內容，供「下載簡報」使用
+  const SOURCE = "<!doctype html>\n" + document.documentElement.outerHTML;
+
+  const stage = document.getElementById("stage");
+  const slides = [...stage.querySelectorAll(".slide")];
+  const total = slides.length;
+  const $ = (id) => document.getElementById(id);
+  let index = 0;
+
+  function fit() {
+    const s = Math.min(innerWidth / 1280, innerHeight / 720);
+    stage.style.transform = `scale(${s})`;
+  }
+
+  function go(n, push = true) {
+    index = Math.max(0, Math.min(total - 1, n));
+    slides.forEach((el, i) => el.classList.toggle("active", i === index));
+    const dark = slides[index].classList.contains("dark");
+    document.body.classList.toggle("is-dark", dark);
+    stage.style.background = dark ? "#1b2b4b" : "";
+    stage.style.setProperty("--p", (index / (total - 1)) * 100 + "%");
+    stage.querySelector(".tear i").style.width = (index / (total - 1)) * 100 + "%";
+    $("stub").textContent = "No." + String(index + 1).padStart(4, "0");
+    $("count").textContent = `${index + 1} / ${total}`;
+    $("btn-prev").disabled = index === 0;
+    $("btn-next").disabled = index === total - 1;
+    $("btn-prev").style.opacity = index === 0 ? ".4" : "1";
+    $("btn-next").style.opacity = index === total - 1 ? ".4" : "1";
+    if (push) history.replaceState(null, "", "#" + (index + 1));
+    document.title = slides[index].dataset.title + "｜問題回報小幫手";
+  }
+
+  // 目錄
+  const list = $("toc-list");
+  slides.forEach((el, i) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = el.dataset.title;
+    b.addEventListener("click", () => { closeToc(); go(i); });
+    li.append(b);
+    list.append(li);
+  });
+  function openToc() {
+    [...list.querySelectorAll("button")].forEach((b, i) => b.setAttribute("aria-current", String(i === index)));
+    $("toc").classList.add("open");
+    list.querySelectorAll("button")[index].focus();
+  }
+  function closeToc() { $("toc").classList.remove("open"); }
+
+  // 操作
+  $("btn-prev").onclick = () => go(index - 1);
+  $("btn-next").onclick = () => go(index + 1);
+  $("btn-toc").onclick = () => ($("toc").classList.contains("open") ? closeToc() : openToc());
+  $("toc").addEventListener("click", (e) => { if (e.target === $("toc")) closeToc(); });
+  $("btn-fs").onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  };
+  $("btn-print").onclick = () => window.print();
+  $("btn-dl").onclick = () => {
+    const url = URL.createObjectURL(new Blob([SOURCE], { type: "text/html;charset=utf-8" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: "問題回報小幫手-簡報.html" });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  // 點舞台：右 2/3 下一頁、左 1/3 上一頁（連結與按鈕不觸發）
+  stage.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return;
+    const r = stage.getBoundingClientRect();
+    (e.clientX - r.left) / r.width < 0.33 ? go(index - 1) : go(index + 1);
+  });
+
+  // 鍵盤
+  addEventListener("keydown", (e) => {
+    if ($("toc").classList.contains("open")) { if (e.key === "Escape") closeToc(); return; }
+    if (e.target.closest && e.target.closest("button") && (e.key === " " || e.key === "Enter")) return;
+    const next = ["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"];
+    const prev = ["ArrowLeft", "ArrowUp", "PageUp", "Backspace"];
+    if (next.includes(e.key)) { e.preventDefault(); go(index + 1); }
+    else if (prev.includes(e.key)) { e.preventDefault(); go(index - 1); }
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(total - 1);
+    else if (e.key.toLowerCase() === "f") $("btn-fs").click();
+    else if (e.key.toLowerCase() === "t" || e.key === "Escape") openToc();
+  });
+
+  // 觸控滑動
+  let x0 = null;
+  addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener("touchend", (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 50) go(index + (dx < 0 ? 1 : -1));
+  });
+
+  addEventListener("resize", fit);
+  addEventListener("hashchange", () => go((parseInt(location.hash.slice(1), 10) || 1) - 1, false));
+  fit();
+  go((parseInt(location.hash.slice(1), 10) || 1) - 1, false);
+})();
+</script>
+</body>
+</html>
