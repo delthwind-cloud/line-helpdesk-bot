@@ -11,5 +11,12 @@
   "vars": {
     "LIFF_ID": "2012592327-yw2Y5kML",
     "LINE_LOGIN_CHANNEL_ID": "2012592327"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "helpdesk-db",
+      "database_id": "43774f48-6e64-4c6d-9a0d-0cd44c52225f"
+    }
+  ]
 }
