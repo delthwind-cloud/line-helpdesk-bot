@@ -9,7 +9,17 @@ export default {
     const signature = request.headers.get("x-line-signature") || "";
 
     // 驗證這個請求真的是 LINE 送來的
-    if (!(await verifySignature(body, signature, env.LINE_CHANNEL_SECRET))) {
+    const secret = (env.LINE_CHANNEL_SECRET || "").trim();
+    if (!(await verifySignature(body, signature, secret))) {
+      // 診斷記錄：只記狀態，不記機密內容
+      console.log(
+        JSON.stringify({
+          msg: "signature check failed",
+          secretConfigured: secret.length > 0,
+          secretLength: secret.length, // Channel secret 正常應為 32
+          signatureHeaderPresent: signature.length > 0,
+        })
+      );
       return new Response("Bad signature", { status: 401 });
     }
 
