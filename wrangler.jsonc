@@ -10,7 +10,10 @@
   },
   "vars": {
     "LIFF_ID": "2012592327-yw2Y5kML",
-    "LINE_LOGIN_CHANNEL_ID": "2012592327"
+    "LINE_LOGIN_CHANNEL_ID": "2012592327",
+    "AI_MODEL": "@cf/qwen/qwen3-30b-a3b-fp8",
+    "AI_DAILY_LIMIT": "300",
+    "AI_USER_DAILY_LIMIT": "15"
   },
   "d1_databases": [
     {
@@ -18,5 +21,8 @@
       "database_name": "helpdesk-db",
       "database_id": "43774f48-6e64-4c6d-9a0d-0cd44c52225f"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
 }
