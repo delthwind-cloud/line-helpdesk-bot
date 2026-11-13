@@ -4,5 +4,12 @@
   "compatibility_date": "2026-11-01",
   "observability": {
     "enabled": true
+  },
+  "assets": {
+    "directory": "./public"
+  },
+  "vars": {
+    "LIFF_ID": "2012592327-yw2Y5kML",
+    "LINE_LOGIN_CHANNEL_ID": "2012592327"
   }
 }
