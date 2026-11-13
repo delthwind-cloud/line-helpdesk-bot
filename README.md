@@ -11,6 +11,7 @@ LINE 使用者 → LINE 平台 → Webhook → Cloudflare Worker（`src/index.js
 | 版本 | 內容 |
 |---|---|
 | v0.1 | Webhook 簽章驗證，複誦使用者訊息 |
+| v0.1.1 | 機密去除前後空白；簽章失敗時記錄診斷（不含機密內容）；開啟 Workers 觀測記錄 |
 
 ## 機密設定
 
