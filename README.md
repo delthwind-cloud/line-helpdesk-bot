@@ -10,13 +10,16 @@ LINE 內開啟 LIFF 表單（`public/liff/index.html`，由同一個 Worker 以�
 → `POST /api/report`（驗證 LIFF access token 屬於我們的 LINE Login channel）→ 問題單存入 Cloudflare D1
 → `GET /api/my-reports` 讓使用者查看自己的問題單
 
+聊天室一般訊息 → Cloudflare Workers AI（`env.AI`，預設 Qwen3 30B）→ 回覆；
+每人每天 15 則、全站每天 300 則，額度記錄在 D1 `ai_usage`（UTC 日期，與免費額度同一天重置）。
+
 ## 專案結構
 
 | 路徑 | 說明 |
 |---|---|
-| `src/index.js` | Worker：LINE Webhook、問題回報 API、D1 資料存取 |
+| `src/index.js` | Worker：LINE Webhook、問題回報 API、D1 資料存取、AI 問答 |
 | `public/liff/index.html` | LIFF 問題回報表單頁 |
-| `wrangler.jsonc` | Worker 設定（靜態資源、非機密變數、D1 綁定） |
+| `wrangler.jsonc` | Worker 設定（靜態資源、非機密變數、D1 與 AI 綁定、AI 模型與額度） |
 
 ## 版本紀錄
 
@@ -28,6 +31,7 @@ LINE 內開啟 LIFF 表單（`public/liff/index.html`，由同一個 Worker 以�
 | v0.2 | 回覆文字由「你說：」改為「收到：」（示範版本差異） |
 | v0.3 | LIFF 問題回報表單、`/api/report`（驗證登入 + 欄位檢查）、「回報」指令、表單送出後的聊天室確認 |
 | v0.4 | 問題單存入 D1（自動建表）、單號改為「日期-流水號」、「我的問題單」分頁與「查詢」指令、每人每小時 10 筆上限 |
+| v0.5 | Workers AI 問答（Qwen3 30B）、每人/全站每日額度保護、「說明」指令、先回 200 再背景回覆、AI 失敗時的備援訊息 |
 
 ## 機密設定
 
