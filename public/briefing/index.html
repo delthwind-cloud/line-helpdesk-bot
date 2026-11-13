@@ -37,8 +37,6 @@
   /* ── 舞台：固定 1280×720，依視窗等比縮放 ── */
   #root { position: fixed; inset: 0; overflow: hidden; }
   #viewport { position: absolute; inset: 0; }
-  #hint { position: fixed; left: 50%; top: 56px; transform: translateX(-50%); z-index: 15; background: rgba(15,26,48,.92); color: #eaf0fb; border: 1px solid #3a4c74; border-radius: 12px; padding: 10px 18px; font-size: 15px; font-weight: 700; display: none; max-width: 90%; text-align: center; }
-  #hint.show { display: block; }
   #stage {
     width: 1280px; height: 720px; position: absolute; left: 50%; top: 50%; margin: -360px 0 0 -640px;
     transform-origin: center center; background: var(--paper); overflow: hidden;
@@ -208,8 +206,59 @@
     .ui.top { top: 6px; right: 6px; gap: 5px; }
     .ui button { padding: 3px 11px; font-size: 13px; min-height: 30px; }
     .ui.nav { bottom: 4px; }
-    #hint { top: 44px; font-size: 13px; }
   }
+
+
+  .arch-p { display: none; }
+
+  /* ── 直式（手機直拿）：720×1280 直版，單欄重新排版 ── */
+  body.portrait #stage { width: 720px; height: 1280px; margin: -640px 0 0 -360px; }
+  body.portrait .slide { padding: 92px 52px 130px; }
+  body.portrait .slide h2 { font-size: 52px !important; line-height: 1.22; max-width: none; margin-bottom: 30px; }
+  body.portrait .lead { font-size: 30px; }
+  body.portrait .small { font-size: 26px; }
+  body.portrait .chrome { left: 52px; right: 52px; bottom: 54px; }
+  body.portrait .two, body.portrait .two.wide-left { grid-template-columns: 1fr; gap: 40px; }
+  body.portrait .phone { width: 100%; max-width: 460px; justify-self: center; }
+  body.portrait .chat { min-height: 0; }
+  body.portrait .b { font-size: 22px; }
+  body.portrait .form { width: 100%; max-width: 480px; justify-self: center; }
+  body.portrait .form .f label { font-size: 21px; }
+  body.portrait .form .box, body.portrait .form .seg span { font-size: 21px; }
+  body.portrait .form .btn { font-size: 23px; }
+  body.portrait .steps li { font-size: 30px; }
+  body.portrait ul.plain { font-size: 29px !important; }
+  body.portrait .cols, body.portrait .cols[style] { grid-template-columns: 1fr !important; }
+  body.portrait .col, body.portrait .col + .col { padding: 0 0 30px; border-left: 0; }
+  body.portrait .col + .col { padding: 30px 0 0; border-top: 3px dashed var(--rule); }
+  body.portrait .col p { font-size: 31px; }
+  body.portrait .col .cmd { font-size: 38px; margin-bottom: 14px; }
+  body.portrait .cover { grid-template-columns: 1fr; gap: 44px; align-items: start; padding-bottom: 0; }
+  body.portrait .cover h1 { font-size: 92px !important; margin-bottom: 26px; }
+  body.portrait .cover .meta { margin-top: 28px; }
+  body.portrait .ticket { width: 100%; max-width: 440px; justify-self: center; }
+  body.portrait .flow { grid-template-columns: 1fr; gap: 14px; }
+  body.portrait .flow .arrow { display: none; }
+  body.portrait .flow > div { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 16px; }
+  body.portrait .flow p { margin: 0; font-size: 26px; }
+  body.portrait .row .no { font-size: 32px; }
+  body.portrait .row .desc { font-size: 26px; }
+  body.portrait .row .meta { font-size: 22px; }
+  body.portrait .sample, body.portrait .callout { font-size: 27px; }
+  body.portrait .trbl, body.portrait .trbl tbody, body.portrait .trbl tr, body.portrait .trbl td { display: block; width: auto; }
+  body.portrait .trbl { font-size: 27px; }
+  body.portrait .trbl tr { padding: 14px 0; }
+  body.portrait .trbl tr + tr { border-top: 2px dashed var(--rule); }
+  body.portrait .trbl tr + tr td { border-top: 0; }
+  body.portrait .trbl td, body.portrait .trbl td:first-child { padding: 0; width: auto; }
+  body.portrait .trbl td:first-child { margin-bottom: 4px; }
+  body.portrait .arch-l { display: none; }
+  body.portrait .arch-p { display: block; }
+  body.portrait .ver { font-size: 28px; }
+  body.portrait .ver div { grid-template-columns: 84px 1fr; }
+  body.portrait h3 { font-size: 32px; }
+  body.portrait .link { white-space: normal !important; font-size: 21px !important; word-break: break-all; }
+  body.portrait .toc button { font-size: 19px; }
 
   /* ── 列印 / 存成 PDF：每張一頁 ── */
   @media print {
@@ -218,7 +267,6 @@
     #root { position: static !important; width: auto !important; height: auto !important; transform: none !important; overflow: visible; }
     #viewport { position: static; display: block; }
     #stage { position: static; margin: 0 !important; transform: none !important; width: auto; height: auto; box-shadow: none; overflow: visible; }
-    #hint { display: none !important; }
     .slide { display: block !important; position: relative; width: 1280px; height: 720px; page-break-after: always; break-after: page; }
     .chrome, .ui, .toc { display: none !important; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -399,7 +447,7 @@
     <!-- 9 運作原理 -->
     <section class="slide" data-title="背後怎麼運作">
       <h2 style="margin-bottom:26px">背後怎麼運作</h2>
-      <svg class="arch" viewBox="0 0 1088 330" role="img" aria-label="LINE 使用者經由 LINE 平台把訊息送到 Cloudflare Worker，Worker 存取 D1 資料庫與 Workers AI，並提供 LIFF 表單頁">
+      <svg class="arch arch-l" viewBox="0 0 1088 330" role="img" aria-label="LINE 使用者經由 LINE 平台把訊息送到 Cloudflare Worker，Worker 存取 D1 資料庫與 Workers AI，並提供 LIFF 表單頁">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1b2b4b"/></marker>
         </defs>
@@ -434,6 +482,40 @@
           <text x="705" y="150" font-size="26" font-weight="800">Cloudflare</text>
           <text x="705" y="184" font-size="26" font-weight="800">Worker</text>
           <text x="705" y="216" font-size="19" fill="#c5d0e6">驗證簽章、分派處理</text>
+        </g>
+      </svg>
+      <svg class="arch arch-p" viewBox="0 0 600 540" role="img" aria-label="LINE 使用者經由 LINE 平台把訊息送到 Cloudflare Worker，Worker 存取 D1 資料庫與 Workers AI，並提供 LIFF 表單頁">
+        <defs><marker id="ahp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1b2b4b"/></marker></defs>
+        <g fill="none" stroke="#1b2b4b" stroke-width="3">
+          <rect x="2" y="2" width="266" height="100" rx="16" fill="#fff"/>
+          <rect x="332" y="2" width="266" height="100" rx="16" fill="#fff"/>
+          <rect x="100" y="196" width="400" height="124" rx="16" fill="#1b2b4b"/>
+          <rect x="2" y="420" width="190" height="112" rx="16" fill="#fff"/>
+          <rect x="205" y="420" width="190" height="112" rx="16" fill="#fff"/>
+          <rect x="408" y="420" width="190" height="112" rx="16" fill="#fff"/>
+          <path d="M268 52 H328" marker-end="url(#ahp)"/>
+          <path d="M465 102 V192" marker-end="url(#ahp)"/>
+          <path d="M170 320 C 150 370, 110 380, 97 416" marker-end="url(#ahp)"/>
+          <path d="M300 320 V416" marker-end="url(#ahp)"/>
+          <path d="M430 320 C 450 370, 490 380, 503 416" marker-end="url(#ahp)"/>
+        </g>
+        <g fill="#1b2b4b" font-size="26" font-weight="800" text-anchor="middle">
+          <text x="135" y="48">使用者</text>
+          <text x="465" y="48">LINE 平台</text>
+          <text x="97" y="468">LIFF 表單頁</text>
+          <text x="300" y="468">D1 資料庫</text>
+          <text x="503" y="468">Workers AI</text>
+        </g>
+        <g fill="#566684" font-size="21" text-anchor="middle">
+          <text x="135" y="80">LINE App</text>
+          <text x="465" y="80">轉送訊息</text>
+          <text x="97" y="502">靜態頁面</text>
+          <text x="300" y="502">問題單、額度</text>
+          <text x="503" y="502">AI 問答</text>
+        </g>
+        <g fill="#f6f8fb" text-anchor="middle">
+          <text x="300" y="242" font-size="30" font-weight="800">Cloudflare Worker</text>
+          <text x="300" y="286" font-size="22" fill="#c5d0e6">驗證簽章、分派處理</text>
         </g>
       </svg>
       <p class="small" style="margin-top:14px">使用者傳訊息，LINE 轉送給 Worker。Worker 依內容回覆、把問題單存進 D1，或請 AI 回答。表單頁也由同一個 Worker 提供。</p>
@@ -527,7 +609,6 @@
   <h2>跳到哪一頁？</h2>
   <ol id="toc-list"></ol>
 </div>
-<div id="hint" role="status">畫面已轉橫向顯示，字才夠大。也可以直接把手機橫放。</div>
 </div>
 
 <script>
@@ -541,25 +622,13 @@
   const $ = (id) => document.getElementById(id);
   let index = 0;
 
-  const root = $("root");
-  let rot = false, hintShown = false;
+  let portrait = false;
   function fit() {
     const W = innerWidth, H = innerHeight;
-    const wasRot = rot;
-    rot = H > W * 1.05;              // 直式（手機）→ 整個畫面轉 90 度，才讀得到字
-    let w = W, h = H;
-    if (rot) {
-      w = H; h = W;
-      Object.assign(root.style, { width: w + "px", height: h + "px", left: (W - w) / 2 + "px", top: (H - h) / 2 + "px", right: "auto", bottom: "auto", transform: "rotate(90deg)" });
-    } else {
-      ["width", "height", "left", "top", "right", "bottom", "transform"].forEach((k) => (root.style[k] = ""));
-    }
-    stage.style.transform = `scale(${Math.min(w / 1280, h / 720)})`;
-    if (rot && !wasRot && !hintShown) {
-      hintShown = true;
-      $("hint").classList.add("show");
-      setTimeout(() => $("hint").classList.remove("show"), 4500);
-    }
+    portrait = H > W * 1.05;          // 直式（手機直拿）→ 720×1280 直版；否則 1280×720 橫版
+    document.body.classList.toggle("portrait", portrait);
+    const sw = portrait ? 720 : 1280, sh = portrait ? 1280 : 720;
+    stage.style.transform = `scale(${Math.min(W / sw, H / sh)})`;
   }
 
   function go(n, push = true) {
@@ -619,8 +688,7 @@
   stage.addEventListener("click", (e) => {
     if (e.target.closest("a, button")) return;
     const r = stage.getBoundingClientRect();
-    const f = rot ? (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
-    f < 0.33 ? go(index - 1) : go(index + 1);
+    (e.clientX - r.left) / r.width < 0.33 ? go(index - 1) : go(index + 1);
   });
 
   // 鍵盤
@@ -638,14 +706,17 @@
   });
 
   // 觸控滑動
-  let t0 = null;
-  addEventListener("touchstart", (e) => { t0 = [e.touches[0].clientX, e.touches[0].clientY]; }, { passive: true });
+  let x0 = null;
+  addEventListener("touchstart", (e) => { x0 = [e.touches[0].clientX, e.touches[0].clientY]; }, { passive: true });
   addEventListener("touchend", (e) => {
-    if (!t0) return;
-    const dx = e.changedTouches[0].clientX - t0[0], dy = e.changedTouches[0].clientY - t0[1]; t0 = null;
-    const d = rot ? dy : dx;          // 轉向後，「往投影片左邊滑」＝手指往上
-    if (Math.abs(d) > 50 && Math.abs(d) > Math.abs(rot ? dx : dy)) go(index + (d < 0 ? 1 : -1));
+    if (!x0) return;
+    const dx = e.changedTouches[0].clientX - x0[0], dy = e.changedTouches[0].clientY - x0[1]; x0 = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(index + (dx < 0 ? 1 : -1));
   });
+
+  // 列印／存成 PDF 一律用橫式
+  addEventListener("beforeprint", () => document.body.classList.remove("portrait"));
+  addEventListener("afterprint", fit);
 
   addEventListener("resize", fit);
   addEventListener("hashchange", () => go((parseInt(location.hash.slice(1), 10) || 1) - 1, false));
