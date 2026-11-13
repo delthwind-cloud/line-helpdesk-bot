@@ -74,6 +74,24 @@
       border-radius: 999px; background: #effbf3; color: var(--green-dark);
       font-weight: 700; letter-spacing: .5px;
     }
+    .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .tabs button {
+      flex: 1; padding: 10px 0; font-size: 15px;
+      background: #fff; color: var(--muted); border: 1px solid var(--line);
+    }
+    .tabs button.active { background: var(--green); color: #fff; border-color: var(--green); }
+    .report { border-top: 1px solid var(--line); padding: 14px 0; }
+    .report:first-child { border-top: 0; padding-top: 0; }
+    .report:last-child { padding-bottom: 0; }
+    .report .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .report .no { font-weight: 700; }
+    .pill { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: #f3f4f6; color: var(--muted); }
+    .pill.status-處理中 { background: #fef3c7; color: #92400e; }
+    .pill.status-已完成 { background: #effbf3; color: var(--green-dark); }
+    .pill.urgent { background: #fee2e2; color: var(--danger); }
+    .report .meta { color: var(--muted); font-size: 12px; margin: 2px 0 6px; }
+    .report .desc { white-space: pre-wrap; word-break: break-word; font-size: 15px; }
+    .empty { text-align: center; color: var(--muted); padding: 24px 0; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -83,6 +101,11 @@
       <h1>問題回報</h1>
       <p id="hello">載入中…</p>
     </header>
+
+    <nav class="tabs" id="tabs" hidden>
+      <button type="button" id="tab-new" class="active">填寫回報</button>
+      <button type="button" id="tab-list">我的問題單</button>
+    </nav>
 
     <form id="form" class="card" hidden novalidate>
       <div class="field">
@@ -115,12 +138,15 @@
       <button id="submit" type="submit">送出回報</button>
     </form>
 
+    <section id="list" class="card" hidden></section>
+
     <section id="done" class="card done" hidden>
       <div class="tick">✅</div>
       <h2>已送出，謝謝你！</h2>
       <div>你的問題單號</div>
       <div class="ticket" id="ticket"></div>
       <p style="color:var(--muted);font-size:14px">我們會盡快處理。</p>
+      <button id="again" class="secondary" type="button">再回報一筆</button>
       <button id="close" class="secondary" type="button" hidden>回到聊天</button>
     </section>
 
@@ -149,12 +175,78 @@
         }
         const profile = await liff.getProfile();
         $("hello").textContent = `${profile.displayName}，請告訴我們你遇到什麼問題`;
-        $("form").hidden = false;
+        $("tabs").hidden = false;
+        showView("new");
       } catch (err) {
         $("hello").textContent = "";
         showError("頁面初始化失敗，請從 LINE 重新開啟。（" + err.message + "）");
       }
     }
+
+    // 三個畫面：new（表單）、list（我的問題單）、done（送出成功）
+    function showView(name) {
+      clearError();
+      $("form").hidden = name !== "new";
+      $("list").hidden = name !== "list";
+      $("done").hidden = name !== "done";
+      $("tabs").hidden = name === "done";
+      $("tab-new").classList.toggle("active", name === "new");
+      $("tab-list").classList.toggle("active", name === "list");
+      if (name === "list") loadList();
+    }
+
+    function formatTime(iso) {
+      return new Date(iso).toLocaleString("zh-TW", {
+        timeZone: "Asia/Taipei", month: "numeric", day: "numeric",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text; // 一律用 textContent，避免 XSS
+      return node;
+    }
+
+    async function loadList() {
+      const box = $("list");
+      box.replaceChildren(el("div", "empty", "載入中…"));
+      try {
+        const res = await fetch("/api/my-reports", {
+          headers: { Authorization: "Bearer " + liff.getAccessToken() },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "讀取失敗，請稍後再試");
+        if (!data.reports.length) {
+          box.replaceChildren(el("div", "empty", "你還沒有送出過問題單"));
+          return;
+        }
+        box.replaceChildren(
+          ...data.reports.map((r) => {
+            const item = el("div", "report");
+            const top = el("div", "top");
+            top.append(el("span", "no", "#" + r.ticketId), el("span", "pill status-" + r.status, r.status));
+            if (r.urgency === "急") top.append(el("span", "pill urgent", "急"));
+            item.append(top, el("div", "meta", r.category + "・" + formatTime(r.createdAt)), el("div", "desc", r.description));
+            return item;
+          })
+        );
+      } catch (err) {
+        box.replaceChildren();
+        showError(err.message);
+      }
+    }
+
+    $("tab-new").addEventListener("click", () => showView("new"));
+    $("tab-list").addEventListener("click", () => showView("list"));
+    $("again").addEventListener("click", () => {
+      $("description").value = "";
+      $("count").textContent = "0";
+      $("submit").disabled = false;
+      $("submit").textContent = "送出回報";
+      showView("new");
+    });
 
     $("description").addEventListener("input", (e) => {
       $("count").textContent = e.target.value.length;
@@ -187,8 +279,7 @@
         if (!res.ok) throw new Error(data.error || "送出失敗，請稍後再試");
 
         $("ticket").textContent = "#" + data.ticketId;
-        $("form").hidden = true;
-        $("done").hidden = false;
+        showView("done");
 
         // 在 LINE 內開啟時，代使用者在聊天室送一則訊息，機器人會用免費的回覆機制回應
         if (liff.isInClient()) {
