@@ -1,17 +1,21 @@
 // LINE 問題回報小幫手
-// v0.3：LIFF 問題回報表單 + 送出 API + 「回報」指令
+// v0.4：問題單存入 D1、「我的問題單」查詢、每小時回報次數限制
 
 const CATEGORIES = ["帳號登入", "設備故障", "網路問題", "軟體操作", "其他"];
 const URGENCIES = ["一般", "急"];
 const MAX_DESCRIPTION = 500;
+const MAX_REPORTS_PER_HOUR = 10;
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // 表單送出的 API（LIFF 頁面呼叫）
+    // LIFF 頁面呼叫的 API
     if (url.pathname === "/api/report" && request.method === "POST") {
       return handleReport(request, env);
+    }
+    if (url.pathname === "/api/my-reports" && request.method === "GET") {
+      return handleMyReports(request, env);
     }
 
     // LINE Webhook
@@ -23,6 +27,46 @@ export default {
     return new Response("LINE helpdesk bot is running", { status: 200 });
   },
 };
+
+// ───────────────────────── 資料庫（D1） ─────────────────────────
+
+let schemaReady; // 同一個 isolate 只建立一次資料表
+
+function ensureSchema(env) {
+  if (!env.DB) throw new Error("D1 binding `DB` is not configured");
+  if (!schemaReady) {
+    schemaReady = env.DB.batch([
+      env.DB.prepare(
+        `CREATE TABLE IF NOT EXISTS reports (
+           id            INTEGER PRIMARY KEY AUTOINCREMENT,
+           created_at    TEXT NOT NULL,
+           line_user_id  TEXT NOT NULL,
+           display_name  TEXT,
+           category      TEXT NOT NULL,
+           urgency       TEXT NOT NULL,
+           description   TEXT NOT NULL,
+           status        TEXT NOT NULL DEFAULT '未處理'
+         )`
+      ),
+      env.DB.prepare(
+        "CREATE INDEX IF NOT EXISTS idx_reports_user ON reports (line_user_id, id DESC)"
+      ),
+    ]).catch((err) => {
+      schemaReady = undefined; // 失敗時允許下次重試
+      throw err;
+    });
+  }
+  return schemaReady;
+}
+
+// 單號：台灣日期 + 流水號，例如 261113-0007
+function ticketLabel(id, createdIso) {
+  const tw = new Date(new Date(createdIso).getTime() + 8 * 3600 * 1000);
+  const pad = (n) => String(n).padStart(2, "0");
+  const date =
+    String(tw.getUTCFullYear()).slice(2) + pad(tw.getUTCMonth() + 1) + pad(tw.getUTCDate());
+  return `${date}-${String(id).padStart(4, "0")}`;
+}
 
 // ───────────────────────── LINE Webhook ─────────────────────────
 
@@ -54,7 +98,13 @@ async function handleWebhook(request, env) {
       accessTokenConfigured: Boolean((env.LINE_CHANNEL_ACCESS_TOKEN || "").trim()),
     })
   );
-  await Promise.all(events.map((e) => handleEvent(e, env)));
+  await Promise.all(
+    events.map((e) =>
+      handleEvent(e, env).catch((err) =>
+        console.log(JSON.stringify({ msg: "event handler error", error: String(err) }))
+      )
+    )
+  );
   return new Response("OK", { status: 200 });
 }
 
@@ -64,7 +114,7 @@ async function handleEvent(event, env) {
   if (event.type === "follow") {
     return reply(
       event.replyToken,
-      `你好！我是問題回報小幫手。\n輸入「回報」就能填寫問題單：\n${liffUrl}`,
+      `你好！我是問題回報小幫手。\n輸入「回報」就能填寫問題單：\n${liffUrl}\n輸入「查詢」可看你最近的問題單。`,
       env
     );
   }
@@ -84,18 +134,39 @@ async function handleEvent(event, env) {
       );
     }
 
-    // 開啟表單的指令
+    // 開啟表單
     if (/^(回報|問題回報|報修|我要回報)$/.test(text)) {
       return reply(event.replyToken, `請點這裡填寫問題回報：\n${liffUrl}`, env);
+    }
+
+    // 查詢自己最近的問題單
+    if (/^(查詢|我的問題單|查單)$/.test(text)) {
+      return reply(event.replyToken, await recentReportsText(event.source?.userId, env), env);
     }
 
     // 其他訊息：暫時複誦（之後會換成 AI 問答）
     return reply(
       event.replyToken,
-      `收到：${text}\n（輸入「回報」可開啟問題回報表單）`,
+      `收到：${text}\n（輸入「回報」填寫問題單、「查詢」看我的問題單）`,
       env
     );
   }
+}
+
+async function recentReportsText(userId, env) {
+  if (!userId) return "無法辨識你的帳號，請改用表單裡的「我的問題單」查看。";
+  await ensureSchema(env);
+  const { results } = await env.DB.prepare(
+    "SELECT id, created_at, category, urgency, status FROM reports WHERE line_user_id = ? ORDER BY id DESC LIMIT 5"
+  )
+    .bind(userId)
+    .all();
+  if (!results.length) return "你還沒有送出過問題單。輸入「回報」就能開始。";
+  const lines = results.map(
+    (r) =>
+      `#${ticketLabel(r.id, r.created_at)}｜${r.status}｜${r.category}${r.urgency === "急" ? "（急）" : ""}`
+  );
+  return `你最近的問題單：\n${lines.join("\n")}`;
 }
 
 async function reply(replyToken, text, env) {
@@ -131,30 +202,37 @@ async function verifySignature(body, signature, secret) {
   return expected === signature;
 }
 
-// ───────────────────────── 問題回報 API ─────────────────────────
+// ───────────────────────── LIFF API ─────────────────────────
 
-async function handleReport(request, env) {
-  // 1. 驗證呼叫者：必須帶 LIFF 的 access token，且 token 屬於我們的 LINE Login channel
+// 驗證呼叫者：必須帶 LIFF 的 access token，且 token 屬於我們的 LINE Login channel
+async function authenticate(request, env) {
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (!token) return json({ error: "尚未登入，請從 LINE 重新開啟表單" }, 401);
+  if (!token) return { error: json({ error: "尚未登入，請從 LINE 重新開啟表單" }, 401) };
 
   const verifyRes = await fetch(
     `https://api.line.me/oauth2/v2.1/verify?access_token=${encodeURIComponent(token)}`
   );
-  if (!verifyRes.ok) return json({ error: "登入已失效，請重新開啟表單" }, 401);
+  if (!verifyRes.ok) return { error: json({ error: "登入已失效，請重新開啟表單" }, 401) };
   const info = await verifyRes.json();
   if (String(info.client_id) !== String(env.LINE_LOGIN_CHANNEL_ID) || !(info.expires_in > 0)) {
-    return json({ error: "登入資訊不符，請從 LINE 重新開啟表單" }, 401);
+    return { error: json({ error: "登入資訊不符，請從 LINE 重新開啟表單" }, 401) };
   }
 
   const profileRes = await fetch("https://api.line.me/v2/profile", {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!profileRes.ok) return json({ error: "無法取得使用者資料，請重新開啟表單" }, 401);
-  const profile = await profileRes.json(); // { userId, displayName, ... }
+  if (!profileRes.ok) {
+    return { error: json({ error: "無法取得使用者資料，請重新開啟表單" }, 401) };
+  }
+  return { profile: await profileRes.json() }; // { userId, displayName, ... }
+}
 
-  // 2. 驗證表單內容
+async function handleReport(request, env) {
+  const { profile, error } = await authenticate(request, env);
+  if (error) return error;
+
+  // 驗證表單內容
   let data;
   try {
     data = await request.json();
@@ -172,29 +250,71 @@ async function handleReport(request, env) {
     return json({ error: `問題描述請在 ${MAX_DESCRIPTION} 字以內` }, 400);
   }
 
-  // 3. 建立問題單（v0.3 先產生單號並記錄；v0.4 會存入 D1 資料庫）
-  const ticketId = newTicketId();
-  console.log(
-    JSON.stringify({
-      msg: "report created",
-      ticketId,
-      category,
-      urgency,
-      descriptionLength: description.length,
-    })
-  );
+  try {
+    await ensureSchema(env);
 
-  return json({ ok: true, ticketId, displayName: profile.displayName });
+    // 防濫用：每位使用者每小時最多 N 筆，保護免費額度
+    const since = new Date(Date.now() - 3600 * 1000).toISOString();
+    const recent = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM reports WHERE line_user_id = ? AND created_at > ?"
+    )
+      .bind(profile.userId, since)
+      .first();
+    if (recent.n >= MAX_REPORTS_PER_HOUR) {
+      return json({ error: `一小時內最多送出 ${MAX_REPORTS_PER_HOUR} 筆，請稍後再試` }, 429);
+    }
+
+    const createdAt = new Date().toISOString();
+    const result = await env.DB.prepare(
+      `INSERT INTO reports (created_at, line_user_id, display_name, category, urgency, description)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+      .bind(createdAt, profile.userId, profile.displayName ?? "", category, urgency, description)
+      .run();
+
+    const ticketId = ticketLabel(result.meta.last_row_id, createdAt);
+    console.log(
+      JSON.stringify({
+        msg: "report saved",
+        ticketId,
+        category,
+        urgency,
+        descriptionLength: description.length,
+      })
+    );
+    return json({ ok: true, ticketId, displayName: profile.displayName });
+  } catch (err) {
+    console.log(JSON.stringify({ msg: "report save failed", error: String(err) }));
+    return json({ error: "系統暫時無法儲存，請稍後再試" }, 500);
+  }
 }
 
-function newTicketId() {
-  const now = new Date(Date.now() + 8 * 3600 * 1000); // 台灣時間
-  const pad = (n) => String(n).padStart(2, "0");
-  const stamp =
-    `${String(now.getUTCFullYear()).slice(2)}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
-    `-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}`;
-  const rand = Math.floor(Math.random() * 900 + 100);
-  return `${stamp}-${rand}`;
+async function handleMyReports(request, env) {
+  const { profile, error } = await authenticate(request, env);
+  if (error) return error;
+
+  try {
+    await ensureSchema(env);
+    const { results } = await env.DB.prepare(
+      `SELECT id, created_at, category, urgency, description, status
+         FROM reports WHERE line_user_id = ? ORDER BY id DESC LIMIT 20`
+    )
+      .bind(profile.userId)
+      .all();
+    return json({
+      reports: results.map((r) => ({
+        ticketId: ticketLabel(r.id, r.created_at),
+        createdAt: r.created_at,
+        category: r.category,
+        urgency: r.urgency,
+        description: r.description,
+        status: r.status,
+      })),
+    });
+  } catch (err) {
+    console.log(JSON.stringify({ msg: "list reports failed", error: String(err) }));
+    return json({ error: "系統暫時無法讀取，請稍後再試" }, 500);
+  }
 }
 
 function json(obj, status = 200) {
