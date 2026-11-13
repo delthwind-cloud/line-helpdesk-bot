@@ -43,7 +43,7 @@ async function handleEvent(event, env) {
     return reply(event.replyToken, "你好！我是問題回報小幫手，目前測試中。", env);
   }
   if (event.type === "message" && event.message.type === "text") {
-    return reply(event.replyToken, `你說：${event.message.text}`, env);
+    return reply(event.replyToken, `收到：${event.message.text}`, env);
   }
 }
 
